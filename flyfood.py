@@ -1,4 +1,13 @@
 def ler_mapa(mapa):
+    """
+    Lê o arquivo de mapa e retorna o ponto R e suas entregas, como um dict com as coordenadas de cada ponto de entrega
+
+    Args:
+        mapa (str): Caminho para o arquivo de mapa
+
+    Returns:
+        tuple: Ponto R (linha, coluna) e dict de entregas {ponto: (linha, coluna)}
+    """
     with open(mapa, 'r') as m: # abre o arquivo passado como parametro com a função de read
         linhas = m.read().splitlines()
 
@@ -22,9 +31,30 @@ def ler_mapa(mapa):
 
 
 def calcular_distancia(p1, p2):
+    """
+    Calcula a distância entre dois pontos
+
+    Args:
+        p1 (tuple): Coordenadas do ponto 1 (linha, coluna)
+        p2 (tuple): Coordenadas do ponto 2 (linha, coluna)
+
+    Returns:
+        int: Distância entre os dois pontos
+    """
     return (abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])) # uso do valor absoluto para não ter caso de distancia negativa
 
 def calcular_rota(rota, ponto_r, entregas):
+    """
+    Calcula o custo de uma rota para realizar um circuito completo de entregas
+
+    Args:
+        rota (tuple): Tupla com a ordem das entregas
+        ponto_r (tuple): Coordenadas do ponto R
+        entregas (dict): Dicionário com as coordenadas das entregas
+
+    Returns:
+        int: Custo da rota
+    """
     custo = 0
     p_atual = ponto_r
 
@@ -37,6 +67,15 @@ def calcular_rota(rota, ponto_r, entregas):
     return custo
 
 def calc_flyfood(caminho_arquivo):
+    """
+    Resolve o problema de roteamento do flyfood com força bruta, testando todas as formas possíveis
+
+    Args:
+        caminho_arquivo (str): Caminho para o arquivo  .txt com a matriz
+
+    Returns:
+        tuple: Melhor rota (str) e custo da rota (int)
+    """
     from itertools import permutations
 
     ponto_r, entregas = ler_mapa(caminho_arquivo)

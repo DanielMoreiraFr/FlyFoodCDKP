@@ -3,8 +3,12 @@ import time
 from rich import print
 
 def main():
+    """
+    Função principal que executa o cálculo da melhor rota e imprime os resultados.
+    """
+
     inicio = time.perf_counter()
-    rota, custo = calc_flyfood('matrix4.txt')
+    rota, custo = calc_flyfood('matrizes/matrix2.txt')
     fim = time.perf_counter()
     tempo_exec = fim - inicio
 
