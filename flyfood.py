@@ -36,5 +36,22 @@ def calcular_rota(rota, ponto_r, entregas):
     custo += calcular_distancia(p_atual, ponto_r) # volta pro ponto R
     return custo
 
-def calc_flyfood():
-    pass
+def calc_flyfood(caminho_arquivo):
+    from itertools import permutations
+
+    ponto_r, entregas = ler_mapa(caminho_arquivo)
+
+    lista_entregas = list(entregas.keys()) # puxa apenas as chaves do dict para ter os nomes das entregas
+
+    melhor_custo = float('inf')
+    melhor_rota = None
+
+    for rota in permutations(lista_entregas):
+        custo_atual = calcular_rota(rota, ponto_r, entregas)
+
+        if custo_atual < melhor_custo:
+            melhor_custo = custo_atual
+            melhor_rota = rota
+
+    res = " ".join(melhor_rota) # join vai transformar a tupla das cidades da melhor rota em uma string da rota em questão
+    return res, melhor_custo
