@@ -7,7 +7,7 @@ def main():
     """
     Função principal que executa o algoritmo genético e imprime os resultados.
     """
-    arquivo = 'matrizes/matriz9.txt'  # troque para a matriz que quiser
+    arquivo = 'matrizes/matriz10.txt'  # troque para a matriz que quiser
 
     print(f'[purple]Calculando a melhor rota para o FlyFood [cyan](algoritmo genético)[/cyan]...[/purple]')
     inicio = time.perf_counter()
