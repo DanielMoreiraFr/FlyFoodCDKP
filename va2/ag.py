@@ -1,3 +1,4 @@
+import math
 import random
 from va1.flyfood import ler_mapa, calcular_distancia
 from rich import print
@@ -71,6 +72,63 @@ def construir_matriz_distancias(ponto_r, entregas):
                 distancias[(i, j)] = calcular_distancia(coords[i], coords[j])
     return distancias, nomes
 
+def ler_tsp(caminho_arquivo):
+    """Le um arquivo .tsp com pesos explicitos no formato UPPER_ROW.
+
+    Aceita o arquivo completo da TSPLIB (com cabecalho NAME/DIMENSION/...) e
+    tambem o arquivo "puro", so com os numeros (como o edgesbrasil58.tsp).
+    A quantidade de cidades vem de DIMENSION ou e deduzida da quantidade de pesos.
+
+    Args:
+        caminho_arquivo: arquivo .tsp
+    Returns:
+        (distancias, nomes): dicionario {(i, j): peso} simetrico e dicionario
+        {numero: nome}. A cidade 1 do arquivo vira o no 0 (origem do ciclo) e
+        as demais viram 1..n-1; os nomes preservam a numeracao original.
+    """
+    with open(caminho_arquivo) as arq:
+        texto = arq.read()
+
+    dimensao = None
+    if 'EDGE_WEIGHT_SECTION' in texto:
+        cabecalho, texto = texto.split('EDGE_WEIGHT_SECTION', 1)
+        for linha in cabecalho.splitlines():
+            chave, _, valor = linha.partition(':')
+            chave, valor = chave.strip(), valor.strip()
+            if chave == 'DIMENSION':
+                dimensao = int(valor)
+            elif chave == 'EDGE_WEIGHT_FORMAT' and valor != 'UPPER_ROW':
+                raise ValueError(f'Formato {valor} nao suportado (so UPPER_ROW)')
+        texto = texto.split('EOF')[0]
+
+    pesos = [int(p) for p in texto.split()]
+    if dimensao is None:  # n*(n-1)/2 pesos -> n
+        dimensao = round((1 + math.sqrt(1 + 8 * len(pesos))) / 2)
+    if len(pesos) != dimensao * (dimensao - 1) // 2:
+        raise ValueError(f'{caminho_arquivo}: {len(pesos)} pesos nao batem com {dimensao} cidades')
+
+    distancias = {}
+    k = 0
+    for i in range(dimensao - 1):
+        for j in range(i + 1, dimensao):
+            distancias[(i, j)] = distancias[(j, i)] = pesos[k]
+            k += 1
+    nomes = {i: str(i + 1) for i in range(dimensao)}
+    return distancias, nomes
+
+def carregar_instancia(caminho_arquivo):
+    """Escolhe o leitor pela extensao: .tsp (pesos explicitos) ou .txt (mapa FlyFood).
+
+    Args:
+        caminho_arquivo: arquivo da instancia
+    Returns:
+        (distancias, nomes) com o no 0 como origem do ciclo
+    """
+    if str(caminho_arquivo).lower().endswith('.tsp'):
+        return ler_tsp(caminho_arquivo)
+    ponto_r, entregas = ler_mapa(caminho_arquivo)
+    return construir_matriz_distancias(ponto_r, entregas)
+
 def torneio(populacao, custos):
     """Selecao de pais por torneio com K=2 (vence o menor custo).
 
@@ -97,8 +155,9 @@ def cruzamento_ox(pai1, pai2):
     def gerar_filho(p1, p2):
         filho = [None] * n
         filho[a:b+1] = p1[a:b+1]  # copia o trecho do primeiro pai
+        copiados = set(p1[a:b+1])
         # genes do segundo pai, a partir do corte, sem os ja copiados
-        resto = [g for g in p2[b+1:] + p2[:b+1] if g not in filho[a:b+1]]
+        resto = [g for g in p2[b+1:] + p2[:b+1] if g not in copiados]
         for k, gene in enumerate(resto):
             filho[(b + 1 + k) % n] = gene  # preenche circularmente
         return filho
@@ -129,6 +188,19 @@ def mutacao_inversao(individuo):
     novo = individuo[:]
     i, j = sorted(random.sample(range(len(novo)), 2))
     novo[i:j+1] = reversed(novo[i:j+1])
+    return novo
+
+def mutacao_swap(individuo):
+    """Troca dois elementos de posicao.
+
+    Args:
+        individuo: permutacao das entregas
+    Returns:
+        novo individuo mutado
+    """
+    novo = individuo[:]
+    i, j = random.sample(range(len(novo)), 2)
+    novo[i], novo[j] = novo[j], novo[i]
     return novo
 
 def mutacao(individuo, taxa_mutacao):
@@ -177,25 +249,39 @@ def selecao_sobreviventes(populacao, custos, filhos, custos_filhos, tamanho):
         novos_custos.append(c)
     return nova_pop, novos_custos
 
-def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1):
-    """Resolve o FlyFood com Algoritmo Genetico.
+def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1,
+                       semente=None, log_a_cada=0):
+    """Resolve o FlyFood (.txt) ou um TSP com pesos explicitos (.tsp) com Algoritmo Genetico.
+
+    O no 0 (R no mapa, cidade 1 no .tsp) fica fixo como origem; o AG evolui a ordem
+    dos demais. Como o custo e um ciclo, fixar a origem nao perde nenhuma solucao.
 
     Args:
-        caminho_arquivo: arquivo do mapa
+        caminho_arquivo: arquivo da instancia (.txt do mapa ou .tsp)
         tam_pop: tamanho da populacao
         geracoes: numero de geracoes
         taxa_mutacao: probabilidade de mutacao de cada filho
+        semente: semente do random (None = aleatorio a cada execucao)
+        log_a_cada: imprime o melhor custo a cada N geracoes (0 = nao imprime)
     Returns:
-        (rota_str, custo) no mesmo formato de calc_flyfood
+        (rota_str, custo): rota completa, ja com a origem no comeco e no fim
     """
-    ponto_r, entregas = ler_mapa(caminho_arquivo)
-    distancias, nomes = construir_matriz_distancias(ponto_r, entregas)
+    if semente is not None:
+        random.seed(semente)
 
-    populacao = inicializaPopulacao(tam_pop, len(entregas))
-    # [0] + individuo inclui R no inicio (e o retorno a R no custoCaminho)
+    distancias, nomes = carregar_instancia(caminho_arquivo)
+    qtde = len(nomes) - 1  # sem contar a origem
+
+    if qtde <= 1:  # nada a otimizar (o sorteio de 2 posicoes exige ao menos 2 genes)
+        melhor = list(range(1, qtde + 1))
+        custo = custoCaminho([0] + melhor, distancias) if qtde else 0
+        return " ".join(nomes[g] for g in [0] + melhor + [0]), custo
+
+    populacao = inicializaPopulacao(tam_pop, qtde)
+    # [0] + individuo inclui a origem no inicio (e o retorno a ela no custoCaminho)
     custos = calculaAptidao([[0] + ind for ind in populacao], distancias)
 
-    for _ in range(geracoes):
+    for g in range(1, geracoes + 1):
         filhos = []
         for _ in range(tam_pop // 2):
             pai1 = torneio(populacao, custos)
@@ -206,76 +292,9 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
         custos_filhos = calculaAptidao([[0] + f for f in filhos], distancias)
         populacao, custos = selecao_sobreviventes(populacao, custos, filhos,
                                                   custos_filhos, tam_pop)
-
-    melhor = populacao[0]  # populacao ja esta ordenada por custo
-    rota_str = " ".join(nomes[g] for g in melhor)
-    return rota_str, custos[0]
-
-def ler_brasil58(caminho_arquivo, qtde_cidades=58):
-    """Le o arquivo edgesbrasil58.tsp (triangulo superior) em um dicionario.
-
-    Args:
-        caminho_arquivo: arquivo com os pesos
-        qtde_cidades: numero de cidades (58)
-    Returns:
-        dicionario {(i, j): peso} simetrico, cidades de 1 a qtde_cidades
-    """
-    with open(caminho_arquivo) as arq:
-        pesos = arq.read().split()  # todos os numeros em sequencia
-
-    distancias = {}
-    k = 0
-    for i in range(1, qtde_cidades):
-        for j in range(i + 1, qtde_cidades + 1):
-            peso = int(pesos[k])
-            k += 1
-            distancias[(i, j)] = peso
-            distancias[(j, i)] = peso
-    return distancias
-
-def algoritmo_genetico_brasil58(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1):
-    """Resolve o TSP Brasil 58 com Algoritmo Genetico.
-
-    Args:
-        caminho_arquivo: arquivo edgesbrasil58.tsp
-        tam_pop: tamanho da populacao
-        geracoes: numero de geracoes
-        taxa_mutacao: probabilidade de mutacao de cada filho
-    Returns:
-        (rota_str, custo) com as cidades de 1 a 58
-    """
-    qtde = 58
-    distancias = ler_brasil58(caminho_arquivo, qtde)
-
-    populacao = inicializaPopulacao(tam_pop, qtde)
-    custos = calculaAptidao(populacao, distancias)  # sem R fixo
-
-    for g in range(1, geracoes + 1):
-        filhos = []
-        for _ in range(tam_pop // 2):
-            pai1 = torneio(populacao, custos)
-            pai2 = torneio(populacao, custos)
-            f1, f2 = cruzamento_ox(pai1, pai2)
-            filhos.append(mutacao(f1, taxa_mutacao))
-            filhos.append(mutacao(f2, taxa_mutacao))
-        custos_filhos = calculaAptidao(filhos, distancias)
-        populacao, custos = selecao_sobreviventes(populacao, custos, filhos,
-                                                  custos_filhos, tam_pop)
-        if g % 1000 == 0:  # mostra o progresso a cada 1000 geracoes
+        if log_a_cada and g % log_a_cada == 0:
             print(f'[dim]Geração[/dim] [cyan]{g}[/cyan] [dim]| melhor custo:[/dim] [yellow]{custos[0]}[/yellow]')
 
-    rota_str = " ".join(str(c) for c in populacao[0])
+    melhor = populacao[0]  # o melhor sempre fica na posicao 0
+    rota_str = " ".join(nomes[g] for g in [0] + melhor + [0])
     return rota_str, custos[0]
-
-def mutacao_swap(individuo):
-    """Troca dois elementos de posicao.
-
-    Args:
-        individuo: permutacao das entregas
-    Returns:
-        novo individuo mutado
-    """
-    novo = individuo[:]
-    i, j = random.sample(range(len(novo)), 2)
-    novo[i], novo[j] = novo[j], novo[i]
-    return novo

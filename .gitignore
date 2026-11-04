@@ -1,0 +1,6 @@
+# Ignorar pastas de dependências e arquivos de ambiente
+node_modules/
+.env
+*.log
+
+__pycache__/
