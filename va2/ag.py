@@ -34,6 +34,20 @@ def _gerar_filhos(populacao, custos, taxa_mutacao):
     return filhos
 
 
+def _nova_populacao(tam_pop, qtde, distancias):
+    """Cria uma populacao aleatoria e calcula o custo de cada individuo."""
+    populacao = inicializaPopulacao(tam_pop, qtde)
+    custos = calculaAptidao([_com_origem(ind) for ind in populacao], distancias)
+    return populacao, custos
+
+
+def _proxima_geracao(populacao, custos, distancias, taxa_mutacao):
+    """Gera os filhos e aplica a selecao de sobreviventes (steady-state)."""
+    filhos = _gerar_filhos(populacao, custos, taxa_mutacao)
+    custos_filhos = calculaAptidao([_com_origem(f) for f in filhos], distancias)
+    return selecao_sobreviventes(populacao, custos, filhos, custos_filhos, len(populacao))
+
+
 def _resolver_caso_trivial(qtde, distancias, nomes):
     """Para 0 ou 1 entrega nao ha o que otimizar (o sorteio exige ao menos 2 genes)."""
     individuo = list(range(1, qtde + 1))
@@ -42,7 +56,7 @@ def _resolver_caso_trivial(qtde, distancias, nomes):
 
 
 def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1,
-                       semente=None, log_a_cada=0):
+                       semente=None, log_a_cada=0, paciencia=0):
     """Resolve o FlyFood (.txt) ou um TSP com pesos explicitos (.tsp) com Algoritmo Genetico.
 
     O no 0 (R no mapa, cidade 1 no .tsp) fica fixo como origem; o AG evolui a ordem
@@ -55,6 +69,8 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
         taxa_mutacao: probabilidade de mutacao de cada filho
         semente: semente do random (None = aleatorio a cada execucao)
         log_a_cada: imprime o melhor custo a cada N geracoes (0 = nao imprime)
+        paciencia: se a populacao ficar N geracoes sem melhorar, ela e reiniciada
+            (o melhor ja encontrado e guardado). 0 = nunca reinicia
     Returns:
         (rota_str, custo): rota completa, ja com a origem no comeco e no fim
     """
@@ -66,16 +82,25 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
     if qtde <= 1:
         return _resolver_caso_trivial(qtde, distancias, nomes)
 
-    populacao = inicializaPopulacao(tam_pop, qtde)
-    custos = calculaAptidao([_com_origem(ind) for ind in populacao], distancias)
+    populacao, custos = _nova_populacao(tam_pop, qtde, distancias)
+    melhor, melhor_custo = populacao[0], custos[0]  # melhor de todas as populacoes
+    melhor_da_populacao, geracoes_sem_melhora = custos[0], 0
 
     for g in range(1, geracoes + 1):
-        filhos = _gerar_filhos(populacao, custos, taxa_mutacao)
-        custos_filhos = calculaAptidao([_com_origem(f) for f in filhos], distancias)
-        populacao, custos = selecao_sobreviventes(populacao, custos, filhos,
-                                                  custos_filhos, tam_pop)
-        if log_a_cada and g % log_a_cada == 0:
-            print(f'[dim]Geração[/dim] [cyan]{g}[/cyan] [dim]| melhor custo:[/dim] [yellow]{custos[0]}[/yellow]')
+        populacao, custos = _proxima_geracao(populacao, custos, distancias, taxa_mutacao)
 
-    melhor = populacao[0]  # o melhor sempre fica na posicao 0
-    return _montar_rota(melhor, nomes), custos[0]
+        if custos[0] < melhor_custo:
+            melhor, melhor_custo = populacao[0], custos[0]  # o melhor fica na posicao 0
+        if custos[0] < melhor_da_populacao:
+            melhor_da_populacao, geracoes_sem_melhora = custos[0], 0
+        else:
+            geracoes_sem_melhora += 1
+
+        if paciencia and geracoes_sem_melhora >= paciencia:  # estagnou: recomeca do zero
+            populacao, custos = _nova_populacao(tam_pop, qtde, distancias)
+            melhor_da_populacao, geracoes_sem_melhora = custos[0], 0
+
+        if log_a_cada and g % log_a_cada == 0:
+            print(f'[dim]Geração[/dim] [cyan]{g}[/cyan] [dim]| melhor custo:[/dim] [yellow]{melhor_custo}[/yellow]')
+
+    return _montar_rota(melhor, nomes), melhor_custo

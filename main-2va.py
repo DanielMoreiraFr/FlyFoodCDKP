@@ -9,8 +9,9 @@ ARQUIVO = 'matrizes/edgesbrasil58.tsp'
 # melhores custos conhecidos (TSPLIB) para mostrar o erro percentual
 OTIMOS = {'edgesbrasil58.tsp': 25395, 'brazil58.tsp': 25395}
 
+# paciencia: reinicia a populacao se ficar N geracoes sem melhorar (guarda o melhor ja achado)
 PARAMS_MAPA = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.3, log_a_cada=500)
-PARAMS_TSP = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.4, log_a_cada=500)
+PARAMS_TSP = dict(tam_pop=100, geracoes=20000, taxa_mutacao=0.4, paciencia=400, log_a_cada=1000)
 
 
 def main():
@@ -18,7 +19,7 @@ def main():
     Função principal que executa o algoritmo genético (mapa .txt ou .tsp) e imprime os resultados.
     """
     nome = ARQUIVO.split('/')[-1]  # so o nome do arquivo, sem a pasta
-    print(f'[purple]Calculando a melhor rota para [cyan]{nome}[/cyan] (algoritmo genético)...[/purple]')
+    print(f'[purple]Calculando a melhor rota para [green]{nome}[/green] (algoritmo genético)...[/purple]')
     params = PARAMS_TSP if nome.endswith('.tsp') else PARAMS_MAPA
 
     inicio = time.perf_counter()
