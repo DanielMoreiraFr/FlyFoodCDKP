@@ -1,39 +1,28 @@
-import os
-import sys
 import time
 from rich import print
 from rich.panel import Panel
 from va2.ag import algoritmo_genetico
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# arquivo padrao; para trocar sem editar o codigo: python main-2va.py matrizes/matriz5.txt
-ARQUIVO_PADRAO = 'matrizes/matriz10.txt'
+# troque aqui o arquivo que quiser testar (rode sempre da raiz do projeto)
+ARQUIVO = 'matrizes/edgesbrasil58.tsp'
 
 # melhores custos conhecidos (TSPLIB) para mostrar o erro percentual
 OTIMOS = {'edgesbrasil58.tsp': 25395, 'brazil58.tsp': 25395}
 
-# parametros por tipo de instancia: o Brasil 58 precisa de bem mais do que os mapas pequenos
-PARAMS_MAPA = dict(tam_pop=100, geracoes=200, taxa_mutacao=0.1)
-PARAMS_TSP = dict(tam_pop=300, geracoes=10000, taxa_mutacao=0.5, log_a_cada=1000)
+PARAMS_MAPA = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.3, log_a_cada=500)
+PARAMS_TSP = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.4, log_a_cada=500)
 
-def resolver_caminho(caminho):
-    """Aceita caminho absoluto, relativo a pasta atual ou relativo a pasta do projeto."""
-    if os.path.isabs(caminho) or os.path.exists(caminho):
-        return caminho
-    return os.path.join(BASE_DIR, caminho)
 
 def main():
     """
     Função principal que executa o algoritmo genético (mapa .txt ou .tsp) e imprime os resultados.
     """
-    arquivo = 'matrizes/matriz9.txt'  # troque para a matriz que quiser
-    nome = os.path.basename(arquivo)
+    nome = ARQUIVO.split('/')[-1]  # so o nome do arquivo, sem a pasta
     print(f'[purple]Calculando a melhor rota para [cyan]{nome}[/cyan] (algoritmo genético)...[/purple]')
-    inicio = time.perf_counter()
     params = PARAMS_TSP if nome.endswith('.tsp') else PARAMS_MAPA
 
-    rota, custo = algoritmo_genetico(arquivo, **params)
+    inicio = time.perf_counter()
+    rota, custo = algoritmo_genetico(ARQUIVO, **params)
     tempo_exec = time.perf_counter() - inicio
 
     linha_custo = f'Custo: [yellow]{custo}[/yellow]'
@@ -49,6 +38,7 @@ def main():
         border_style='cyan',
         expand=False,
     ))
+
 
 if __name__ == "__main__":
     main()

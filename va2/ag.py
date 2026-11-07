@@ -1,253 +1,45 @@
-import math
+"""Algoritmo Genético para o FlyFood (.txt) e para TSP com pesos explicitos (.tsp)."""
 import random
-from va1.flyfood import ler_mapa, calcular_distancia
 from rich import print
 
+from va2.instancia import carregar_instancia, ORIGEM
+from va2.populacao import custoCaminho, inicializaPopulacao, calculaAptidao
+from va2.selecao import torneio, selecao_sobreviventes
+from va2.cruzamento import cruzamento_ox
+from va2.mutacao import mutacao
 
-def custoCaminho(permutacao, dicDistancias):
-    """Soma o custo entre nos consecutivos e do ultimo de volta ao primeiro.
 
-    Args:
-        permutacao: lista de nos (ex: [0, 3, 1, 2])
-        dicDistancias: dicionario {(i, j): peso}
-    Returns:
-        custo total do ciclo
+def _com_origem(individuo):
+    """Coloca a origem no inicio (o custoCaminho ja inclui o retorno a ela)."""
+    return [ORIGEM] + individuo
+
+
+def _montar_rota(individuo, nomes):
+    """Rota completa em texto, com a origem no comeco e no fim."""
+    return " ".join(nomes[g] for g in [ORIGEM] + individuo + [ORIGEM])
+
+
+def _gerar_filhos(populacao, custos, taxa_mutacao):
+    """Gera filhos suficientes para igualar o tamanho da populacao.
+
+    Cada par: torneio (pais) -> OX (cruzamento) -> mutacao em cada filho.
     """
-    soma = 0
-    for i in range(len(permutacao) - 1):
-        soma += dicDistancias[(permutacao[i], permutacao[i + 1])]
-    soma += dicDistancias[(permutacao[-1], permutacao[0])]
-    return soma
+    filhos = []
+    for _ in range(len(populacao) // 2):
+        pai1 = torneio(populacao, custos)
+        pai2 = torneio(populacao, custos)
+        filho1, filho2 = cruzamento_ox(pai1, pai2)
+        filhos.append(mutacao(filho1, taxa_mutacao))
+        filhos.append(mutacao(filho2, taxa_mutacao))
+    return filhos
 
-def inicializaPopulacao(tamanho, qtdeCidades):
-    """Cria 'tamanho' permutacoes aleatorias de 1..qtdeCidades.
 
-    Args:
-        tamanho: tamanho da populacao
-        qtdeCidades: quantidade de cidades/entregas
-    Returns:
-        lista de listas (permutacoes)
-    """
-    lista = []
-    for i in range(tamanho):
-        individuo = list(range(1, qtdeCidades + 1))
-        random.shuffle(individuo)
-        lista.append(individuo)
-    return lista
+def _resolver_caso_trivial(qtde, distancias, nomes):
+    """Para 0 ou 1 entrega nao ha o que otimizar (o sorteio exige ao menos 2 genes)."""
+    individuo = list(range(1, qtde + 1))
+    custo = custoCaminho(_com_origem(individuo), distancias) if qtde else 0
+    return _montar_rota(individuo, nomes), custo
 
-def calculaAptidao(populacao, dicDistancias):
-    """Calcula o custo de cada individuo (menor = melhor).
-
-    Args:
-        populacao: lista de permutacoes
-        dicDistancias: dicionario {(i, j): peso}
-    Returns:
-        lista de custos na mesma ordem da populacao
-    """
-    listaAptidao = []
-    for elem in populacao:
-        listaAptidao.append(custoCaminho(elem, dicDistancias))
-    return listaAptidao
-
-def construir_matriz_distancias(ponto_r, entregas):
-    """Converte o mapa de entregas em dicionario de distancias (i, j).
-
-    Args:
-        ponto_r: coordenadas de R (ex: (0, 0))
-        entregas: dicionario {nome: coordenadas} (ex: {'A': (2, 1)})
-    Returns:
-        (distancias, nomes): dicionario {(i, j): peso} simetrico e
-        dicionario {numero: nome} (R = 0, entregas = 1..n)
-    """
-    nomes = {0: 'R'}
-    coords = {0: ponto_r}
-    for numero, nome in enumerate(entregas, start=1):
-        nomes[numero] = nome
-        coords[numero] = entregas[nome]
-
-    distancias = {}
-    for i in coords:
-        for j in coords:
-            if i != j:
-                distancias[(i, j)] = calcular_distancia(coords[i], coords[j])
-    return distancias, nomes
-
-def ler_tsp(caminho_arquivo):
-    """Le um arquivo .tsp com pesos explicitos no formato UPPER_ROW.
-
-    Aceita o arquivo completo da TSPLIB (com cabecalho NAME/DIMENSION/...) e
-    tambem o arquivo "puro", so com os numeros (como o edgesbrasil58.tsp).
-    A quantidade de cidades vem de DIMENSION ou e deduzida da quantidade de pesos.
-
-    Args:
-        caminho_arquivo: arquivo .tsp
-    Returns:
-        (distancias, nomes): dicionario {(i, j): peso} simetrico e dicionario
-        {numero: nome}. A cidade 1 do arquivo vira o no 0 (origem do ciclo) e
-        as demais viram 1..n-1; os nomes preservam a numeracao original.
-    """
-    with open(caminho_arquivo) as arq:
-        texto = arq.read()
-
-    dimensao = None
-    if 'EDGE_WEIGHT_SECTION' in texto:
-        cabecalho, texto = texto.split('EDGE_WEIGHT_SECTION', 1)
-        for linha in cabecalho.splitlines():
-            chave, _, valor = linha.partition(':')
-            chave, valor = chave.strip(), valor.strip()
-            if chave == 'DIMENSION':
-                dimensao = int(valor)
-            elif chave == 'EDGE_WEIGHT_FORMAT' and valor != 'UPPER_ROW':
-                raise ValueError(f'Formato {valor} nao suportado (so UPPER_ROW)')
-        texto = texto.split('EOF')[0]
-
-    pesos = [int(p) for p in texto.split()]
-    if dimensao is None:  # n*(n-1)/2 pesos -> n
-        dimensao = round((1 + math.sqrt(1 + 8 * len(pesos))) / 2)
-    if len(pesos) != dimensao * (dimensao - 1) // 2:
-        raise ValueError(f'{caminho_arquivo}: {len(pesos)} pesos nao batem com {dimensao} cidades')
-
-    distancias = {}
-    k = 0
-    for i in range(dimensao - 1):
-        for j in range(i + 1, dimensao):
-            distancias[(i, j)] = distancias[(j, i)] = pesos[k]
-            k += 1
-    nomes = {i: str(i + 1) for i in range(dimensao)}
-    return distancias, nomes
-
-def carregar_instancia(caminho_arquivo):
-    """Escolhe o leitor pela extensao: .tsp (pesos explicitos) ou .txt (mapa FlyFood).
-
-    Args:
-        caminho_arquivo: arquivo da instancia
-    Returns:
-        (distancias, nomes) com o no 0 como origem do ciclo
-    """
-    if str(caminho_arquivo).lower().endswith('.tsp'):
-        return ler_tsp(caminho_arquivo)
-    ponto_r, entregas = ler_mapa(caminho_arquivo)
-    return construir_matriz_distancias(ponto_r, entregas)
-
-def torneio(populacao, custos):
-    """Selecao de pais por torneio com K=2 (vence o menor custo).
-
-    Args:
-        populacao: lista de individuos
-        custos: lista de custos na mesma ordem da populacao
-    Returns:
-        o individuo vencedor
-    """
-    i, j = random.sample(range(len(populacao)), 2)
-    return populacao[i] if custos[i] <= custos[j] else populacao[j]
-
-def cruzamento_ox(pai1, pai2):
-    """Order Crossover (OX): gera 2 filhos validos a partir de 2 pais.
-
-    Args:
-        pai1, pai2: permutacoes das entregas
-    Returns:
-        (filho1, filho2)
-    """
-    n = len(pai1)
-    a, b = sorted(random.sample(range(n), 2))  # corte do trecho copiado
-
-    def gerar_filho(p1, p2):
-        filho = [None] * n
-        filho[a:b+1] = p1[a:b+1]  # copia o trecho do primeiro pai
-        copiados = set(p1[a:b+1])
-        # genes do segundo pai, a partir do corte, sem os ja copiados
-        resto = [g for g in p2[b+1:] + p2[:b+1] if g not in copiados]
-        for k, gene in enumerate(resto):
-            filho[(b + 1 + k) % n] = gene  # preenche circularmente
-        return filho
-
-    return gerar_filho(pai1, pai2), gerar_filho(pai2, pai1)
-
-def mutacao_insert(individuo):
-    """Remove um elemento de uma posicao e o insere em outra.
-
-    Args:
-        individuo: permutacao das entregas
-    Returns:
-        novo individuo mutado
-    """
-    novo = individuo[:]
-    i, j = random.sample(range(len(novo)), 2)
-    novo.insert(j, novo.pop(i))
-    return novo
-
-def mutacao_inversao(individuo):
-    """Inverte a ordem dos elementos entre duas posicoes sorteadas.
-
-    Args:
-        individuo: permutacao das entregas
-    Returns:
-        novo individuo mutado
-    """
-    novo = individuo[:]
-    i, j = sorted(random.sample(range(len(novo)), 2))
-    novo[i:j+1] = reversed(novo[i:j+1])
-    return novo
-
-def mutacao_swap(individuo):
-    """Troca dois elementos de posicao.
-
-    Args:
-        individuo: permutacao das entregas
-    Returns:
-        novo individuo mutado
-    """
-    novo = individuo[:]
-    i, j = random.sample(range(len(novo)), 2)
-    novo[i], novo[j] = novo[j], novo[i]
-    return novo
-
-def mutacao(individuo, taxa_mutacao):
-    """Com probabilidade taxa_mutacao, aplica insert, inversao ou swap (1/3 cada).
-
-    Args:
-        individuo: permutacao das entregas
-        taxa_mutacao: probabilidade de mutar (0 a 1)
-    Returns:
-        individuo (mutado ou igual)
-    """
-    if random.random() < taxa_mutacao:
-        operador = random.choice([mutacao_insert, mutacao_inversao, mutacao_swap])
-        return operador(individuo)
-    return individuo
-
-def selecao_sobreviventes(populacao, custos, filhos, custos_filhos, tamanho):
-    """Steady-state sem clones: populacao + filhos competem, ficam os de menor custo.
-
-    Args:
-        populacao, custos: individuos atuais e seus custos
-        filhos, custos_filhos: novos individuos e seus custos
-        tamanho: tamanho original da populacao
-    Returns:
-        (nova_populacao, novos_custos)
-    """
-    juntos = sorted(zip(custos + custos_filhos, populacao + filhos),
-                    key=lambda par: par[0])
-    vistos = set()
-    nova_pop, novos_custos, repetidos = [], [], []
-    for c, ind in juntos:
-        chave = tuple(ind)
-        if chave not in vistos:  # so entra se ainda nao existe na populacao
-            vistos.add(chave)
-            nova_pop.append(ind)
-            novos_custos.append(c)
-        else:
-            repetidos.append((c, ind))
-        if len(nova_pop) == tamanho:
-            break
-    # mapas pequenos podem ter poucas permutacoes diferentes: completa com repetidos
-    for c, ind in repetidos:
-        if len(nova_pop) == tamanho:
-            break
-        nova_pop.append(ind)
-        novos_custos.append(c)
-    return nova_pop, novos_custos
 
 def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1,
                        semente=None, log_a_cada=0):
@@ -271,30 +63,19 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
 
     distancias, nomes = carregar_instancia(caminho_arquivo)
     qtde = len(nomes) - 1  # sem contar a origem
-
-    if qtde <= 1:  # nada a otimizar (o sorteio de 2 posicoes exige ao menos 2 genes)
-        melhor = list(range(1, qtde + 1))
-        custo = custoCaminho([0] + melhor, distancias) if qtde else 0
-        return " ".join(nomes[g] for g in [0] + melhor + [0]), custo
+    if qtde <= 1:
+        return _resolver_caso_trivial(qtde, distancias, nomes)
 
     populacao = inicializaPopulacao(tam_pop, qtde)
-    # [0] + individuo inclui a origem no inicio (e o retorno a ela no custoCaminho)
-    custos = calculaAptidao([[0] + ind for ind in populacao], distancias)
+    custos = calculaAptidao([_com_origem(ind) for ind in populacao], distancias)
 
     for g in range(1, geracoes + 1):
-        filhos = []
-        for _ in range(tam_pop // 2):
-            pai1 = torneio(populacao, custos)
-            pai2 = torneio(populacao, custos)
-            f1, f2 = cruzamento_ox(pai1, pai2)
-            filhos.append(mutacao(f1, taxa_mutacao))
-            filhos.append(mutacao(f2, taxa_mutacao))
-        custos_filhos = calculaAptidao([[0] + f for f in filhos], distancias)
+        filhos = _gerar_filhos(populacao, custos, taxa_mutacao)
+        custos_filhos = calculaAptidao([_com_origem(f) for f in filhos], distancias)
         populacao, custos = selecao_sobreviventes(populacao, custos, filhos,
                                                   custos_filhos, tam_pop)
         if log_a_cada and g % log_a_cada == 0:
             print(f'[dim]Geração[/dim] [cyan]{g}[/cyan] [dim]| melhor custo:[/dim] [yellow]{custos[0]}[/yellow]')
 
     melhor = populacao[0]  # o melhor sempre fica na posicao 0
-    rota_str = " ".join(nomes[g] for g in [0] + melhor + [0])
-    return rota_str, custos[0]
+    return _montar_rota(melhor, nomes), custos[0]
