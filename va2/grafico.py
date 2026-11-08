@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 def criar_grafico(otimo=None):
     """Abre a janela do gráfico e devolve a função que a atualiza.
 
-    Esquerda: custo de cada indivíduo da população atual (menor = melhor).
-    Direita: melhor custo e custo médio da população ao longo das gerações.
+    Esquerda: melhor custo alcançado por cada população (a cada reinício começa uma nova).
+    Direita: melhor custo encontrado ao longo das gerações.
 
     Args:
         otimo: custo ótimo conhecido, desenhado como linha de referência (opcional)
@@ -16,36 +16,46 @@ def criar_grafico(otimo=None):
     """
     plt.ion()
     fig, (ax_pop, ax_hist) = plt.subplots(1, 2, figsize=(12, 5))
-    ax_pop.set_title('População atual (um custo por indivíduo)')
-    ax_pop.set_xlabel('Indivíduo (do melhor ao pior)')
+    ax_pop.set_title('Melhor custo de cada população')
+    ax_pop.set_xlabel('População (a última está em andamento)')
     ax_pop.set_ylabel('Custo')
     ax_hist.set_title('Evolução')
     ax_hist.set_xlabel('Geração')
     ax_hist.set_ylabel('Custo')
 
     linha_melhor, = ax_hist.plot([], [], color='tab:green', label='Melhor custo')
-    linha_media, = ax_hist.plot([], [], color='tab:orange', label='Média da população')
     if otimo is not None:
         ax_hist.axhline(otimo, color='gray', linestyle='--', label=f'Ótimo ({otimo})')
+        ax_pop.axhline(otimo, color='gray', linestyle='--')
     ax_hist.legend()
 
-    barras = []  # criadas na primeira atualizacao (precisam do tamanho da populacao)
-    geracoes, melhores, medias = [], [], []
+    barras, rotulos, alturas = [], [], []  # uma barra por populacao (reinicio)
+    geracoes, melhores = [], []
+
+    def _cor(custo):
+        return 'tab:green' if custo == otimo else 'tab:blue'
 
     def atualizar(geracao, custos, melhor_custo, reinicios):
-        ordenados = sorted(custos)
-        if not barras:
-            barras.extend(ax_pop.bar(range(len(ordenados)), ordenados, color='tab:blue'))
-        for barra, custo in zip(barras, ordenados):
-            barra.set_height(custo)
-        referencia = otimo if otimo is not None else melhor_custo
-        ax_pop.set_ylim(referencia * 0.95, max(ordenados) * 1.02)  # barras nao comecam do zero
+        melhor_populacao = min(custos)
+
+        while len(barras) <= reinicios:  # populacao nova (ou reinicio entre dois logs)
+            posicao = len(barras)
+            barras.append(ax_pop.bar(posicao, melhor_populacao)[0])
+            rotulos.append(ax_pop.text(posicao, melhor_populacao, '', ha='center', va='bottom'))
+            alturas.append(melhor_populacao)
+        alturas[reinicios] = melhor_populacao
+
+        barras[reinicios].set_height(melhor_populacao)
+        barras[reinicios].set_color(_cor(melhor_populacao))
+        rotulos[reinicios].set_position((reinicios, melhor_populacao))
+        rotulos[reinicios].set_text(str(melhor_populacao))
+        ax_pop.set_xticks(range(len(barras)), [str(i + 1) for i in range(len(barras))])
+        referencia = otimo if otimo is not None else min(alturas)
+        ax_pop.set_ylim(referencia * 0.99, max(alturas) * 1.01)  # barras nao comecam do zero
 
         geracoes.append(geracao)
         melhores.append(melhor_custo)
-        medias.append(sum(custos) / len(custos))
         linha_melhor.set_data(geracoes, melhores)
-        linha_media.set_data(geracoes, medias)
         ax_hist.relim()
         ax_hist.autoscale_view()
 
