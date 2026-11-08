@@ -56,7 +56,7 @@ def _resolver_caso_trivial(qtde, distancias, nomes):
 
 
 def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=0.1,
-                       semente=None, log_a_cada=0, paciencia=0):
+                       semente=None, log_a_cada=0, paciencia=0, ao_atualizar=None):
     """Resolve o FlyFood (.txt) ou um TSP com pesos explicitos (.tsp) com Algoritmo Genetico.
 
     O no 0 (R no mapa, cidade 1 no .tsp) fica fixo como origem; o AG evolui a ordem
@@ -68,9 +68,11 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
         geracoes: numero de geracoes
         taxa_mutacao: probabilidade de mutacao de cada filho
         semente: semente do random (None = aleatorio a cada execucao)
-        log_a_cada: imprime o melhor custo a cada N geracoes (0 = nao imprime)
+        log_a_cada: a cada N geracoes imprime o melhor custo e chama ao_atualizar (0 = nunca)
         paciencia: se a populacao ficar N geracoes sem melhorar, ela e reiniciada
             (o melhor ja encontrado e guardado). 0 = nunca reinicia
+        ao_atualizar: funcao opcional (geracao, custos, melhor_custo, reinicios) chamada
+            junto com o log, usada para o grafico em tempo real. None = desligado
     Returns:
         (rota_str, custo): rota completa, ja com a origem no comeco e no fim
     """
@@ -85,6 +87,7 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
     populacao, custos = _nova_populacao(tam_pop, qtde, distancias)
     melhor, melhor_custo = populacao[0], custos[0]  # melhor de todas as populacoes
     melhor_da_populacao, geracoes_sem_melhora = custos[0], 0
+    reinicios = 0
 
     for g in range(1, geracoes + 1):
         populacao, custos = _proxima_geracao(populacao, custos, distancias, taxa_mutacao)
@@ -99,8 +102,11 @@ def algoritmo_genetico(caminho_arquivo, tam_pop=100, geracoes=200, taxa_mutacao=
         if paciencia and geracoes_sem_melhora >= paciencia:  # estagnou: recomeca do zero
             populacao, custos = _nova_populacao(tam_pop, qtde, distancias)
             melhor_da_populacao, geracoes_sem_melhora = custos[0], 0
+            reinicios += 1
 
         if log_a_cada and g % log_a_cada == 0:
             print(f'[dim]Geração[/dim] [cyan]{g}[/cyan] [dim]| melhor custo:[/dim] [yellow]{melhor_custo}[/yellow]')
+            if ao_atualizar:
+                ao_atualizar(g, custos, melhor_custo, reinicios)
 
     return _montar_rota(melhor, nomes), melhor_custo
