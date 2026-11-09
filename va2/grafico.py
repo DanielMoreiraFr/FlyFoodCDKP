@@ -60,7 +60,8 @@ def criar_grafico(otimo=None):
         ax_hist.autoscale_view()
 
         fig.suptitle(f'Geração {geracao} | melhor custo: {melhor_custo} | reinícios: {reinicios}')
-        plt.pause(0.001)  # redesenha e processa eventos da janela
+        fig.canvas.draw_idle()     # agenda o redesenho ...
+        fig.canvas.flush_events()  # ... e a janela o executa agora, antes de seguir
 
     return atualizar
 
