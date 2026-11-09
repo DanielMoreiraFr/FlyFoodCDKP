@@ -4,18 +4,22 @@ import random
 def torneio(populacao, custos):
     """Seleção de pais: sorteia 2 indivíduos (K=2) e vence o de menor custo."""
     i, j = random.sample(range(len(populacao)), 2)
-    return populacao[i] if custos[i] <= custos[j] else populacao[j]
+    if custos[i] <= custos[j]:
+        return populacao[i]
+    else:
+        return populacao[j]
 
 
 def selecao_sobreviventes(populacao, custos, filhos, custos_filhos, tamanho):
-    """Steady-state: população e filhos competem e ficam os de menor custo, sem clones."""
+    """Steady-state: população e filhos competem e ficam os de menor custo, sem repetição."""
     juntos = sorted(zip(custos + custos_filhos, populacao + filhos),
                     key=lambda par: par[0])  # do menor para o maior custo
+                    #a função zip() junta duas listas posição por posição
     vistos = set()
     nova_pop, novos_custos, repetidos = [], [], []
     for custo, individuo in juntos:
         chave = tuple(individuo)
-        if chave not in vistos:  # entra se ainda não existe na nova população
+        if chave not in vistos:  # entra se ainda não existe na nova população, para evitar clones
             vistos.add(chave)
             nova_pop.append(individuo)
             novos_custos.append(custo)
