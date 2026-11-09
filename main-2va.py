@@ -15,7 +15,7 @@ OTIMOS = {'edgesbrasil58.tsp': 25395, 'brazil58.tsp': 25395}
 # paciencia: reinicia a populacao se ficar N geracoes sem melhorar (guarda o melhor ja achado)
 # log_a_cada: de quantas em quantas geracoes imprime o progresso e atualiza o gráfico
 PARAMS_MAPA = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.3, log_a_cada=500)
-PARAMS_TSP = dict(tam_pop=100, geracoes=10000, taxa_mutacao=0.4, paciencia=400, log_a_cada=250)
+PARAMS_TSP = dict(tam_pop=100, geracoes=10000, taxa_mutacao=0.4, paciencia=500, log_a_cada=250)
 
 
 def main():

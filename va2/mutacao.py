@@ -44,8 +44,7 @@ def mutacao_swap(individuo):
     return novo
 
 
-OPERADORES = [mutacao_insert, mutacao_inversao, mutacao_swap]
-
+OPERADORES = [mutacao_insert, mutacao_inversao]
 
 def mutacao(individuo, taxa_mutacao):
     """Com probabilidade taxa_mutacao, aplica insert, inversao ou swap (1/3 cada).
