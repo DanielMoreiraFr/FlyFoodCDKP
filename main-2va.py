@@ -3,17 +3,12 @@ from rich import print
 from rich.panel import Panel
 from va2.ag import algoritmo_genetico
 
-# troque aqui o arquivo que quiser testar (rode sempre da raiz do projeto)
-ARQUIVO = 'matrizes/edgesbrasil58.tsp'
+ARQUIVO = 'matrizes/edgesbrasil58.tsp' #Arquivo de entrada da matriz
 
-# True = abre o gráfico em tempo real; False = sem gráfico (use para medir o tempo)
-MOSTRAR_GRAFICO = True
+MOSTRAR_GRAFICO = True #Liga ou desliga a geração do gráfico (False roda mais rápido)
 
-# melhores custos conhecidos (TSPLIB) para mostrar o erro percentual
-OTIMOS = {'edgesbrasil58.tsp': 25395, 'brazil58.tsp': 25395}
+OTIMOS = {'edgesbrasil58.tsp': 25395, 'brazil58.tsp': 25395} #Melhores Custos do brasil58
 
-# paciencia: reinicia a populacao se ficar N geracoes sem melhorar (guarda o melhor ja achado)
-# log_a_cada: de quantas em quantas geracoes imprime o progresso e atualiza o gráfico
 PARAMS_MAPA = dict(tam_pop=200, geracoes=10000, taxa_mutacao=0.3, log_a_cada=500)
 PARAMS_TSP = dict(tam_pop=100, geracoes=10000, taxa_mutacao=0.4, paciencia=500, log_a_cada=250)
 
@@ -22,18 +17,21 @@ def main():
     """
     Função principal que executa o algoritmo genético (mapa .txt ou .tsp) e imprime os resultados.
     """
-    nome = ARQUIVO.split('/')[-1]  # so o nome do arquivo, sem a pasta
+    nome = ARQUIVO.split('/')[-1]  #so o nome do arquivo, sem a pasta
     print(f'[purple]Calculando a melhor rota para [cyan]{nome}[/cyan] (algoritmo genético)...[/purple]')
-    params = PARAMS_TSP if nome.endswith('.tsp') else PARAMS_MAPA
+    if nome.endswith('.tsp'):
+        params = PARAMS_TSP  
+    else: 
+        params = PARAMS_MAPA
 
     ao_atualizar = None
-    if MOSTRAR_GRAFICO:
-        from va2.grafico import criar_grafico  # so importa o matplotlib se o gráfico estiver ligado
+    if MOSTRAR_GRAFICO: #só importa o matplotlib se o gráfico estiver ligado
+        from va2.grafico import criar_grafico
         ao_atualizar = criar_grafico(OTIMOS.get(nome))
 
-    inicio = time.perf_counter()
+    inicio = time.perf_counter() #tempo de execução do algoritmo
     rota, custo = algoritmo_genetico(ARQUIVO, ao_atualizar=ao_atualizar, **params)
-    tempo_exec = time.perf_counter() - inicio
+    tempo_exec = time.perf_counter() - inicio #tempo de exec
 
     linha_custo = f'Custo: [yellow]{custo}[/yellow]'
     if nome in OTIMOS:
